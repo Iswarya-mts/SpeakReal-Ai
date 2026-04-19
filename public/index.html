@@ -1,0 +1,704 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SpeakReal — Talk Like a Human</title>
+<link href="https://fonts.googleapis.com/css2?family=Nunito:wght@400;600;700;800;900&family=Playfair+Display:ital,wght@0,700;1,700&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0d1117;
+    --surface: #161b22;
+    --card: #1c2333;
+    --border: #30363d;
+    --accent: #58ffa0;
+    --blue: #58b4ff;
+    --purple: #c084fc;
+    --pink: #ff6eb4;
+    --yellow: #ffd166;
+    --red: #ff6b6b;
+    --text: #e6edf3;
+    --muted: #7d8590;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body {
+    font-family:'Nunito',sans-serif;
+    background:var(--bg);
+    color:var(--text);
+    height:100vh;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+  }
+  .bg-blob { position:fixed; border-radius:50%; filter:blur(80px); opacity:0.1; pointer-events:none; z-index:0; animation:blobFloat 8s ease-in-out infinite alternate; }
+  .bg-blob-1 { width:400px; height:400px; background:var(--accent); top:-100px; left:-100px; }
+  .bg-blob-2 { width:350px; height:350px; background:var(--blue); bottom:-80px; right:-80px; animation-delay:2s; }
+  .bg-blob-3 { width:250px; height:250px; background:var(--purple); top:40%; left:40%; animation-delay:4s; }
+  @keyframes blobFloat { from{transform:translate(0,0) scale(1);} to{transform:translate(30px,20px) scale(1.08);} }
+
+  .screen { display:none; flex-direction:column; height:100vh; position:relative; z-index:1; }
+  .screen.active { display:flex; }
+
+  /* ── ONBOARDING ── */
+  #screen-onboard {
+    align-items:center; justify-content:center;
+    padding:1.5rem 1rem; gap:1.4rem;
+    animation:fadeUp 0.5s ease both;
+  }
+  @keyframes fadeUp { from{opacity:0;transform:translateY(20px);} to{opacity:1;transform:translateY(0);} }
+
+  .brand-title {
+    font-family:'Playfair Display',serif; font-style:italic; font-size:2.6rem;
+    background:linear-gradient(135deg,var(--accent),var(--blue),var(--purple));
+    -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text;
+    text-align:center; line-height:1;
+  }
+  .brand-sub { font-size:0.78rem; font-weight:700; letter-spacing:0.18em; text-transform:uppercase; color:var(--muted); text-align:center; margin-top:0.3rem; }
+  .pick-label { font-size:0.72rem; font-weight:800; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); }
+
+  .char-grid { display:grid; grid-template-columns:1fr 1fr; gap:0.75rem; width:100%; max-width:380px; }
+
+  .char-card {
+    background:var(--card); border:2px solid var(--border); border-radius:20px;
+    padding:1rem 0.75rem 0.85rem; cursor:pointer;
+    transition:all 0.25s cubic-bezier(0.34,1.56,0.64,1);
+    display:flex; flex-direction:column; align-items:center; gap:0.5rem;
+    position:relative; overflow:hidden;
+  }
+  .char-card:hover { transform:translateY(-4px) scale(1.02); }
+  .char-card.selected[data-color="green"]  { border-color:var(--accent);  box-shadow:0 0 0 4px rgba(88,255,160,0.15); }
+  .char-card.selected[data-color="blue"]   { border-color:var(--blue);   box-shadow:0 0 0 4px rgba(88,180,255,0.15); }
+  .char-card.selected[data-color="pink"]   { border-color:var(--pink);   box-shadow:0 0 0 4px rgba(255,110,180,0.15); }
+  .char-card.selected[data-color="yellow"] { border-color:var(--yellow); box-shadow:0 0 0 4px rgba(255,209,102,0.15); }
+
+  .char-svg-wrap { width:72px; height:72px; }
+  .char-svg-wrap svg { width:100%; height:100%; filter:drop-shadow(0 4px 12px rgba(0,0,0,0.4)); transition:transform 0.3s cubic-bezier(0.34,1.56,0.64,1); }
+  .char-card:hover .char-svg-wrap svg, .char-card.selected .char-svg-wrap svg { transform:scale(1.1) translateY(-3px); animation:charBob 1.5s ease-in-out infinite; }
+  @keyframes charBob { 0%,100%{transform:scale(1.1) translateY(-3px);} 50%{transform:scale(1.1) translateY(-7px);} }
+
+  .char-name { font-size:0.88rem; font-weight:800; color:var(--text); }
+  .char-role { font-size:0.68rem; font-weight:600; color:var(--muted); text-align:center; }
+
+  .selected-check { position:absolute; top:8px; right:8px; width:18px; height:18px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:0.65rem; opacity:0; transition:opacity 0.2s; }
+  .char-card.selected[data-color="green"]  .selected-check { background:var(--accent); color:#000; opacity:1; }
+  .char-card.selected[data-color="blue"]   .selected-check { background:var(--blue);  color:#000; opacity:1; }
+  .char-card.selected[data-color="pink"]   .selected-check { background:var(--pink);  color:#fff; opacity:1; }
+  .char-card.selected[data-color="yellow"] .selected-check { background:var(--yellow);color:#000; opacity:1; }
+
+  .btn-start {
+    width:100%; max-width:380px; padding:1rem; border:none; border-radius:16px;
+    background:linear-gradient(135deg,var(--accent),#00cc78);
+    color:#0d1117; font-family:'Nunito',sans-serif; font-size:1rem; font-weight:900;
+    cursor:pointer; letter-spacing:0.04em;
+    transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1);
+    box-shadow:0 4px 24px rgba(88,255,160,0.25);
+  }
+  .btn-start:hover { transform:translateY(-3px) scale(1.02); box-shadow:0 8px 32px rgba(88,255,160,0.4); }
+
+  /* ── CHAT ── */
+  .chat-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:0.8rem 1rem;
+    background:rgba(13,17,23,0.92); backdrop-filter:blur(16px);
+    border-bottom:1px solid var(--border); flex-shrink:0; z-index:10;
+  }
+  .hdr-left { display:flex; align-items:center; gap:0.75rem; }
+  .hdr-avatar { width:44px; height:44px; border-radius:14px; overflow:hidden; flex-shrink:0; position:relative; background:var(--card); border:2px solid var(--border); display:flex; align-items:center; justify-content:center; }
+  .hdr-avatar svg { width:38px; height:38px; }
+  .online-dot { position:absolute; bottom:-2px; right:-2px; width:10px; height:10px; background:var(--accent); border-radius:50%; border:2px solid var(--bg); animation:pulseDot 2s ease-in-out infinite; }
+  @keyframes pulseDot { 0%,100%{opacity:1;transform:scale(1);} 50%{opacity:0.6;transform:scale(0.85);} }
+  .hdr-name { font-size:0.92rem; font-weight:800; }
+  .hdr-status { font-size:0.68rem; color:var(--accent); font-weight:600; }
+  .hdr-right { display:flex; gap:0.4rem; }
+  .icon-btn { width:34px; height:34px; border-radius:10px; background:var(--card); border:1px solid var(--border); color:var(--muted); display:flex; align-items:center; justify-content:center; cursor:pointer; font-size:0.85rem; transition:all 0.2s; }
+  .icon-btn:hover { color:var(--accent); border-color:var(--accent); }
+
+  .timer-bar { display:flex; align-items:center; gap:0.6rem; padding:0.35rem 1rem; background:var(--surface); border-bottom:1px solid var(--border); flex-shrink:0; }
+  .timer-label { font-size:0.65rem; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.1em; }
+  .timer-val { font-size:0.72rem; font-weight:800; color:var(--yellow); min-width:40px; text-align:right; }
+  .prog-outer { flex:1; height:5px; background:var(--border); border-radius:10px; overflow:hidden; }
+  .prog-inner { height:100%; border-radius:10px; background:linear-gradient(90deg,var(--accent),var(--blue)); transition:width 1s linear; }
+
+  .messages { flex:1; overflow-y:auto; padding:1rem 0.9rem 0.5rem; display:flex; flex-direction:column; gap:0.9rem; scroll-behavior:smooth; }
+  .messages::-webkit-scrollbar { width:3px; }
+  .messages::-webkit-scrollbar-thumb { background:var(--border); border-radius:4px; }
+
+  .msg-row { display:flex; gap:0.55rem; animation:msgIn 0.3s cubic-bezier(0.34,1.56,0.64,1) both; }
+  .msg-row.user { flex-direction:row-reverse; }
+  @keyframes msgIn { from{opacity:0;transform:translateY(10px) scale(0.96);} to{opacity:1;transform:translateY(0) scale(1);} }
+
+  .msg-av { width:34px; height:34px; border-radius:10px; flex-shrink:0; overflow:hidden; margin-top:auto; background:var(--card); border:1.5px solid var(--border); display:flex; align-items:center; justify-content:center; }
+  .msg-av svg { width:28px; height:28px; }
+  .msg-av.user-av { background:linear-gradient(135deg,#3b4fd4,#6366f1); border-color:#6366f1; font-size:1rem; }
+
+  .msg-content { max-width:80%; display:flex; flex-direction:column; gap:0.25rem; }
+  .msg-row.user .msg-content { align-items:flex-end; }
+
+  .bubble { padding:0.7rem 0.9rem; border-radius:16px; font-size:0.875rem; line-height:1.55; word-break:break-word; }
+  .bubble.ai { background:var(--card); border:1px solid var(--border); border-bottom-left-radius:4px; }
+  .bubble.user { background:linear-gradient(135deg,#1d4ed8,#3b82f6); border-bottom-right-radius:4px; color:#fff; }
+
+  .msg-time { font-size:0.6rem; color:var(--muted); font-weight:600; padding:0 0.2rem; }
+
+  .mem-pill { display:inline-flex; align-items:center; gap:0.3rem; background:rgba(192,132,252,0.12); border:1px solid rgba(192,132,252,0.3); border-radius:20px; padding:0.2rem 0.6rem; font-size:0.65rem; font-weight:700; color:var(--purple); margin-bottom:0.15rem; }
+
+  .correction { background:rgba(255,107,107,0.07); border:1px solid rgba(255,107,107,0.2); border-radius:12px; padding:0.6rem 0.8rem; font-size:0.75rem; max-width:80%; animation:msgIn 0.3s ease 0.1s both; line-height:1.5; }
+  .corr-label { font-size:0.65rem; font-weight:800; text-transform:uppercase; letter-spacing:0.1em; color:var(--yellow); margin-bottom:0.25rem; }
+  .corr-wrong { color:var(--red); text-decoration:line-through; }
+  .corr-right { color:var(--accent); font-weight:800; }
+  .corr-tip { color:var(--muted); margin-top:0.2rem; font-size:0.7rem; }
+
+  .typing-row { display:flex; align-items:flex-end; gap:0.55rem; }
+  .typing-bubble { background:var(--card); border:1px solid var(--border); border-radius:16px; border-bottom-left-radius:4px; padding:0.75rem 1rem; display:flex; gap:5px; align-items:center; }
+  .t-dot { width:7px; height:7px; background:var(--muted); border-radius:50%; animation:tdot 1.3s ease-in-out infinite; }
+  .t-dot:nth-child(2) { animation-delay:0.18s; }
+  .t-dot:nth-child(3) { animation-delay:0.36s; }
+  @keyframes tdot { 0%,60%,100%{transform:translateY(0);opacity:0.35;} 30%{transform:translateY(-6px);opacity:1;} }
+
+  /* ── INPUT AREA ── */
+  .input-area { padding:0.75rem 0.9rem 0.9rem; background:rgba(13,17,23,0.96); backdrop-filter:blur(16px); border-top:1px solid var(--border); flex-shrink:0; }
+  .input-row { display:flex; gap:0.55rem; align-items:flex-end; }
+  .input-box { flex:1; background:var(--card); border:1.5px solid var(--border); border-radius:14px; padding:0.7rem 0.9rem; font-family:'Nunito',sans-serif; font-size:0.875rem; font-weight:600; color:var(--text); resize:none; min-height:42px; max-height:110px; outline:none; transition:border-color 0.2s; line-height:1.4; }
+  .input-box::placeholder { color:var(--muted); }
+  .input-box:focus { border-color:var(--blue); }
+
+  .send-btn { width:42px; height:42px; border-radius:12px; background:linear-gradient(135deg,var(--accent),#00cc78); border:none; color:#0d1117; font-size:1.1rem; font-weight:900; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s cubic-bezier(0.34,1.56,0.64,1); flex-shrink:0; }
+  .send-btn:hover { transform:scale(1.12); box-shadow:0 4px 16px rgba(88,255,160,0.35); }
+  .send-btn:disabled { opacity:0.4; transform:none; cursor:not-allowed; }
+
+  /* Voice button */
+  .voice-btn {
+    width:42px; height:42px; border-radius:12px;
+    background:var(--card); border:1.5px solid var(--border);
+    color:var(--muted); font-size:1.1rem; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+    transition:all 0.2s; flex-shrink:0;
+  }
+  .voice-btn:hover { border-color:var(--pink); color:var(--pink); }
+  .voice-btn.listening {
+    background:rgba(255,110,180,0.15);
+    border-color:var(--pink);
+    color:var(--pink);
+    animation:voicePulse 1s ease-in-out infinite;
+  }
+  @keyframes voicePulse { 0%,100%{box-shadow:0 0 0 0 rgba(255,110,180,0.4);} 50%{box-shadow:0 0 0 8px rgba(255,110,180,0);} }
+
+  /* AI speaking indicator */
+  .speaking-badge {
+    display:none;
+    align-items:center; gap:0.4rem;
+    background:rgba(88,255,160,0.1);
+    border:1px solid rgba(88,255,160,0.3);
+    border-radius:20px; padding:0.25rem 0.7rem;
+    font-size:0.68rem; font-weight:700; color:var(--accent);
+    margin-bottom:0.3rem;
+  }
+  .speaking-badge.active { display:inline-flex; }
+  .speak-dot { width:6px; height:6px; background:var(--accent); border-radius:50%; animation:tdot 0.8s ease-in-out infinite; }
+  .speak-dot:nth-child(2) { animation-delay:0.15s; }
+  .speak-dot:nth-child(3) { animation-delay:0.3s; }
+
+  .input-hint { font-size:0.65rem; font-weight:700; color:var(--muted); text-align:center; margin-top:0.45rem; }
+
+  /* Voice status bar */
+  .voice-status { font-size:0.7rem; font-weight:700; color:var(--pink); text-align:center; min-height:16px; margin-top:0.3rem; }
+</style>
+</head>
+<body>
+
+<div class="bg-blob bg-blob-1"></div>
+<div class="bg-blob bg-blob-2"></div>
+<div class="bg-blob bg-blob-3"></div>
+
+<!-- ══ ONBOARDING ══ -->
+<div id="screen-onboard" class="screen active">
+  <div>
+    <div class="brand-title">SpeakReal</div>
+    <div class="brand-sub">Your AI English Companion</div>
+  </div>
+
+  <div class="pick-label">Pick your companion</div>
+
+  <div class="char-grid">
+    <div class="char-card selected" data-voice="Maya" data-color="green" onclick="selectVoice(this)">
+      <div class="selected-check">✓</div>
+      <div class="char-svg-wrap">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="40" cy="68" rx="18" ry="10" fill="#1a4d3a"/>
+          <rect x="25" y="52" width="30" height="22" rx="10" fill="#22c55e"/>
+          <path d="M33 52 L40 60 L47 52" fill="none" stroke="white" stroke-width="2" stroke-linecap="round"/>
+          <circle cx="40" cy="36" r="20" fill="#fcd5b0"/>
+          <ellipse cx="40" cy="18" rx="20" ry="10" fill="#1a0a00"/>
+          <ellipse cx="20" cy="32" rx="5" ry="12" fill="#1a0a00"/>
+          <ellipse cx="60" cy="32" rx="5" ry="12" fill="#1a0a00"/>
+          <rect x="20" y="14" width="40" height="12" rx="6" fill="#1a0a00"/>
+          <circle cx="40" cy="13" r="7" fill="#1a0a00"/>
+          <ellipse cx="33" cy="36" rx="4" ry="4.5" fill="white"/>
+          <ellipse cx="47" cy="36" rx="4" ry="4.5" fill="white"/>
+          <circle cx="34" cy="37" r="2.5" fill="#1a0a00"/>
+          <circle cx="48" cy="37" r="2.5" fill="#1a0a00"/>
+          <circle cx="35" cy="36" r="1" fill="white"/>
+          <circle cx="49" cy="36" r="1" fill="white"/>
+          <path d="M30 31 Q33 29 36 31" stroke="#5a3010" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M44 31 Q47 29 50 31" stroke="#5a3010" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M34 43 Q40 49 46 43" stroke="#c0783a" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <ellipse cx="28" cy="42" rx="4" ry="2.5" fill="#ffb3a0" opacity="0.6"/>
+          <ellipse cx="52" cy="42" rx="4" ry="2.5" fill="#ffb3a0" opacity="0.6"/>
+          <ellipse cx="20" cy="37" rx="3" ry="4" fill="#fcd5b0"/>
+          <ellipse cx="60" cy="37" rx="3" ry="4" fill="#fcd5b0"/>
+        </svg>
+      </div>
+      <div class="char-name">Maya</div>
+      <div class="char-role">Patient Teacher</div>
+    </div>
+
+    <div class="char-card" data-voice="Arjun" data-color="blue" onclick="selectVoice(this)">
+      <div class="selected-check">✓</div>
+      <div class="char-svg-wrap">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="40" cy="68" rx="18" ry="10" fill="#1a2a4a"/>
+          <rect x="24" y="51" width="32" height="23" rx="10" fill="#1e3a6e"/>
+          <polygon points="40,52 37,56 40,70 43,56" fill="#58b4ff"/>
+          <rect x="36" y="52" width="8" height="20" fill="white"/>
+          <circle cx="40" cy="36" r="20" fill="#d4956a"/>
+          <ellipse cx="40" cy="18" rx="20" ry="10" fill="#0a0a0a"/>
+          <rect x="20" y="14" width="40" height="10" rx="5" fill="#0a0a0a"/>
+          <ellipse cx="20" cy="37" rx="3" ry="4" fill="#d4956a"/>
+          <ellipse cx="60" cy="37" rx="3" ry="4" fill="#d4956a"/>
+          <ellipse cx="33" cy="36" rx="4" ry="4.5" fill="white"/>
+          <ellipse cx="47" cy="36" rx="4" ry="4.5" fill="white"/>
+          <circle cx="34" cy="37" r="2.5" fill="#0a0a0a"/>
+          <circle cx="48" cy="37" r="2.5" fill="#0a0a0a"/>
+          <circle cx="35" cy="36" r="1" fill="white"/>
+          <circle cx="49" cy="36" r="1" fill="white"/>
+          <path d="M29 30 Q33 28 37 30" stroke="#5a3010" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <path d="M43 30 Q47 28 51 30" stroke="#5a3010" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <path d="M35 43 Q40 47 45 43" stroke="#8a5530" stroke-width="2" fill="none" stroke-linecap="round"/>
+          <rect x="28" y="32" width="10" height="8" rx="3" fill="none" stroke="#58b4ff" stroke-width="1.5"/>
+          <rect x="42" y="32" width="10" height="8" rx="3" fill="none" stroke="#58b4ff" stroke-width="1.5"/>
+          <line x1="38" y1="36" x2="42" y2="36" stroke="#58b4ff" stroke-width="1.5"/>
+        </svg>
+      </div>
+      <div class="char-name">Arjun</div>
+      <div class="char-role">Cool Mentor</div>
+    </div>
+
+    <div class="char-card" data-voice="Zara" data-color="pink" onclick="selectVoice(this)">
+      <div class="selected-check">✓</div>
+      <div class="char-svg-wrap">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="40" cy="68" rx="18" ry="10" fill="#5a1a3a"/>
+          <rect x="24" y="51" width="32" height="23" rx="10" fill="#ff6eb4"/>
+          <circle cx="40" cy="36" r="20" fill="#ffe0c0"/>
+          <ellipse cx="40" cy="17" rx="21" ry="11" fill="#ff3366"/>
+          <ellipse cx="18" cy="32" rx="6" ry="14" fill="#ff3366"/>
+          <rect x="19" y="12" width="42" height="12" rx="6" fill="#ff3366"/>
+          <ellipse cx="20" cy="37" rx="3" ry="4" fill="#ffe0c0"/>
+          <ellipse cx="60" cy="37" rx="3" ry="4" fill="#ffe0c0"/>
+          <circle cx="60" cy="41" r="2" fill="#ff6eb4"/>
+          <ellipse cx="33" cy="36" rx="4.5" ry="5" fill="white"/>
+          <ellipse cx="47" cy="36" rx="4.5" ry="5" fill="white"/>
+          <circle cx="34" cy="37" r="3" fill="#220055"/>
+          <circle cx="48" cy="37" r="3" fill="#220055"/>
+          <circle cx="35" cy="36" r="1.2" fill="white"/>
+          <circle cx="49" cy="36" r="1.2" fill="white"/>
+          <path d="M29 30 Q33 27 37 30" stroke="#220055" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M43 30 Q47 27 51 30" stroke="#220055" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+          <path d="M33 43 Q40 50 47 43" stroke="#c04070" stroke-width="2" fill="#ffb3d0" stroke-linecap="round"/>
+          <ellipse cx="27" cy="42" rx="5" ry="3" fill="#ffb3d0" opacity="0.7"/>
+          <ellipse cx="53" cy="42" rx="5" ry="3" fill="#ffb3d0" opacity="0.7"/>
+        </svg>
+      </div>
+      <div class="char-name">Zara</div>
+      <div class="char-role">Fun Friend</div>
+    </div>
+
+    <div class="char-card" data-voice="Leo" data-color="yellow" onclick="selectVoice(this)">
+      <div class="selected-check">✓</div>
+      <div class="char-svg-wrap">
+        <svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg">
+          <ellipse cx="40" cy="68" rx="18" ry="10" fill="#3a2a00"/>
+          <rect x="24" y="51" width="32" height="23" rx="10" fill="#f59e0b"/>
+          <rect x="24" y="51" width="5" height="23" rx="3" fill="#fbbf24" opacity="0.5"/>
+          <rect x="51" y="51" width="5" height="23" rx="3" fill="#fbbf24" opacity="0.5"/>
+          <circle cx="40" cy="36" r="20" fill="#c8833a"/>
+          <ellipse cx="40" cy="17" rx="19" ry="9" fill="#1a0a00"/>
+          <polygon points="30,18 27,4 33,14" fill="#1a0a00"/>
+          <polygon points="37,16 36,2 41,13" fill="#1a0a00"/>
+          <polygon points="44,16 45,2 49,13" fill="#1a0a00"/>
+          <polygon points="50,18 54,5 56,16" fill="#1a0a00"/>
+          <rect x="21" y="14" width="38" height="10" rx="5" fill="#1a0a00"/>
+          <rect x="20" y="24" width="40" height="5" rx="3" fill="#ffd166" opacity="0.9"/>
+          <ellipse cx="20" cy="37" rx="3" ry="4" fill="#c8833a"/>
+          <ellipse cx="60" cy="37" rx="3" ry="4" fill="#c8833a"/>
+          <ellipse cx="33" cy="36" rx="4" ry="4.5" fill="white"/>
+          <ellipse cx="47" cy="36" rx="4" ry="4.5" fill="white"/>
+          <circle cx="34" cy="37" r="2.5" fill="#0a0500"/>
+          <circle cx="48" cy="37" r="2.5" fill="#0a0500"/>
+          <circle cx="35" cy="36" r="1" fill="white"/>
+          <circle cx="49" cy="36" r="1" fill="white"/>
+          <path d="M29 30 Q33 27 37 29" stroke="#0a0500" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M43 29 Q47 27 51 30" stroke="#0a0500" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <path d="M35 43 Q42 48 47 44" stroke="#8a5020" stroke-width="2" fill="none" stroke-linecap="round"/>
+        </svg>
+      </div>
+      <div class="char-name">Leo</div>
+      <div class="char-role">Energy Buddy</div>
+    </div>
+  </div>
+
+  <button class="btn-start" onclick="startChat()">🚀 Start Talking!</button>
+</div>
+
+<!-- ══ CHAT SCREEN ══ -->
+<div id="screen-chat" class="screen">
+  <div class="chat-header">
+    <div class="hdr-left">
+      <div class="hdr-avatar" id="hdr-avatar"><div class="online-dot"></div></div>
+      <div>
+        <div class="hdr-name" id="hdr-name">Maya</div>
+        <div class="hdr-status" id="hdr-status">● Online · Ready to chat</div>
+      </div>
+    </div>
+    <div class="hdr-right">
+      <div class="icon-btn" onclick="showMemory()">🧠</div>
+      <div class="icon-btn" onclick="goBack()">✕</div>
+    </div>
+  </div>
+
+  <div class="timer-bar">
+    <span class="timer-label">Free Session</span>
+    <div class="prog-outer"><div class="prog-inner" id="prog" style="width:100%"></div></div>
+    <span class="timer-val" id="timer">60:00</span>
+  </div>
+
+  <div class="messages" id="messages"></div>
+
+  <div class="input-area">
+    <div id="speaking-badge" class="speaking-badge">
+      <div class="speak-dot"></div><div class="speak-dot"></div><div class="speak-dot"></div>
+      AI is speaking...
+    </div>
+    <div class="input-row">
+      <button class="voice-btn" id="voice-btn" onclick="toggleVoice()" title="Hold to speak">🎤</button>
+      <textarea class="input-box" id="user-input"
+        placeholder="Type or tap 🎤 to speak…"
+        rows="1"
+        onkeydown="handleKey(event)"
+        oninput="autoResize(this)"></textarea>
+      <button class="send-btn" id="send-btn" onclick="sendMessage()">↑</button>
+    </div>
+    <div class="voice-status" id="voice-status"></div>
+    <div class="input-hint">✏️ SpeakReal gently corrects your English as you chat</div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════
+//   CONFIG — change if needed
+// ══════════════════════════════
+const BACKEND_URL = "http://localhost:3000";
+
+// ── AVATAR SVGs (for chat bubbles) ──
+const avatarSVGs = {
+  Maya: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="25" y="52" width="30" height="22" rx="10" fill="#22c55e"/><circle cx="40" cy="36" r="20" fill="#fcd5b0"/><ellipse cx="40" cy="18" rx="20" ry="10" fill="#1a0a00"/><ellipse cx="20" cy="32" rx="5" ry="12" fill="#1a0a00"/><ellipse cx="60" cy="32" rx="5" ry="12" fill="#1a0a00"/><rect x="20" y="14" width="40" height="12" rx="6" fill="#1a0a00"/><circle cx="40" cy="13" r="7" fill="#1a0a00"/><ellipse cx="33" cy="36" rx="4" ry="4.5" fill="white"/><ellipse cx="47" cy="36" rx="4" ry="4.5" fill="white"/><circle cx="34" cy="37" r="2.5" fill="#1a0a00"/><circle cx="48" cy="37" r="2.5" fill="#1a0a00"/><circle cx="35" cy="36" r="1" fill="white"/><circle cx="49" cy="36" r="1" fill="white"/><path d="M34 43 Q40 49 46 43" stroke="#c0783a" stroke-width="2" fill="none" stroke-linecap="round"/><ellipse cx="28" cy="42" rx="4" ry="2.5" fill="#ffb3a0" opacity="0.6"/><ellipse cx="52" cy="42" rx="4" ry="2.5" fill="#ffb3a0" opacity="0.6"/></svg>`,
+  Arjun:`<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="24" y="51" width="32" height="23" rx="10" fill="#1e3a6e"/><polygon points="40,52 37,56 40,70 43,56" fill="#58b4ff"/><circle cx="40" cy="36" r="20" fill="#d4956a"/><ellipse cx="40" cy="18" rx="20" ry="10" fill="#0a0a0a"/><rect x="20" y="14" width="40" height="10" rx="5" fill="#0a0a0a"/><ellipse cx="33" cy="36" rx="4" ry="4.5" fill="white"/><ellipse cx="47" cy="36" rx="4" ry="4.5" fill="white"/><circle cx="34" cy="37" r="2.5" fill="#0a0a0a"/><circle cx="48" cy="37" r="2.5" fill="#0a0a0a"/><circle cx="35" cy="36" r="1" fill="white"/><circle cx="49" cy="36" r="1" fill="white"/><path d="M35 43 Q40 47 45 43" stroke="#8a5530" stroke-width="2" fill="none" stroke-linecap="round"/><rect x="28" y="32" width="10" height="8" rx="3" fill="none" stroke="#58b4ff" stroke-width="1.5"/><rect x="42" y="32" width="10" height="8" rx="3" fill="none" stroke="#58b4ff" stroke-width="1.5"/><line x1="38" y1="36" x2="42" y2="36" stroke="#58b4ff" stroke-width="1.5"/></svg>`,
+  Zara: `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="24" y="51" width="32" height="23" rx="10" fill="#ff6eb4"/><circle cx="40" cy="36" r="20" fill="#ffe0c0"/><ellipse cx="40" cy="17" rx="21" ry="11" fill="#ff3366"/><ellipse cx="18" cy="32" rx="6" ry="14" fill="#ff3366"/><rect x="19" y="12" width="42" height="12" rx="6" fill="#ff3366"/><ellipse cx="33" cy="36" rx="4.5" ry="5" fill="white"/><ellipse cx="47" cy="36" rx="4.5" ry="5" fill="white"/><circle cx="34" cy="37" r="3" fill="#220055"/><circle cx="48" cy="37" r="3" fill="#220055"/><circle cx="35" cy="36" r="1.2" fill="white"/><circle cx="49" cy="36" r="1.2" fill="white"/><path d="M33 43 Q40 50 47 43" stroke="#c04070" stroke-width="2" fill="#ffb3d0" stroke-linecap="round"/><ellipse cx="27" cy="42" rx="5" ry="3" fill="#ffb3d0" opacity="0.7"/><ellipse cx="53" cy="42" rx="5" ry="3" fill="#ffb3d0" opacity="0.7"/></svg>`,
+  Leo:  `<svg viewBox="0 0 80 80" xmlns="http://www.w3.org/2000/svg"><rect x="24" y="51" width="32" height="23" rx="10" fill="#f59e0b"/><circle cx="40" cy="36" r="20" fill="#c8833a"/><ellipse cx="40" cy="17" rx="19" ry="9" fill="#1a0a00"/><polygon points="30,18 27,4 33,14" fill="#1a0a00"/><polygon points="37,16 36,2 41,13" fill="#1a0a00"/><polygon points="44,16 45,2 49,13" fill="#1a0a00"/><rect x="21" y="14" width="38" height="10" rx="5" fill="#1a0a00"/><rect x="20" y="24" width="40" height="5" rx="3" fill="#ffd166" opacity="0.9"/><ellipse cx="33" cy="36" rx="4" ry="4.5" fill="white"/><ellipse cx="47" cy="36" rx="4" ry="4.5" fill="white"/><circle cx="34" cy="37" r="2.5" fill="#0a0500"/><circle cx="48" cy="37" r="2.5" fill="#0a0500"/><circle cx="35" cy="36" r="1" fill="white"/><circle cx="49" cy="36" r="1" fill="white"/><path d="M35 43 Q42 48 47 44" stroke="#8a5020" stroke-width="2" fill="none" stroke-linecap="round"/></svg>`
+};
+
+// ── VOICE SETTINGS per character ──
+const voiceSettings = {
+  Maya:  { pitch: 1.2, rate: 0.92, gender: 'female' },
+  Arjun: { pitch: 0.9, rate: 0.9,  gender: 'male'   },
+  Zara:  { pitch: 1.3, rate: 1.0,  gender: 'female' },
+  Leo:   { pitch: 0.85,rate: 0.95, gender: 'male'   },
+};
+
+// ── STATE ──
+let selectedVoice = 'Maya';
+let sessionId = 'session_' + Date.now();
+let isLoading = false;
+let timerInterval = null;
+let secondsLeft = 3600;
+let recognition = null;
+let isListening = false;
+let speechSynth = window.speechSynthesis;
+let availableVoices = [];
+
+// Load voices
+speechSynth.onvoiceschanged = () => { availableVoices = speechSynth.getVoices(); };
+
+// ── ONBOARDING ──
+function selectVoice(el) {
+  document.querySelectorAll('.char-card').forEach(c => c.classList.remove('selected'));
+  el.classList.add('selected');
+  selectedVoice = el.dataset.voice;
+}
+
+async function startChat() {
+  document.getElementById('screen-onboard').classList.remove('active');
+  document.getElementById('screen-chat').classList.add('active');
+  document.getElementById('hdr-name').textContent = selectedVoice;
+  const av = document.getElementById('hdr-avatar');
+  av.innerHTML = avatarSVGs[selectedVoice] + '<div class="online-dot"></div>';
+  startTimer();
+  await fetchOpening();
+}
+
+function goBack() {
+  clearInterval(timerInterval);
+  stopSpeaking();
+  document.getElementById('screen-chat').classList.remove('active');
+  document.getElementById('screen-onboard').classList.add('active');
+  document.getElementById('messages').innerHTML = '';
+  secondsLeft = 3600;
+  document.getElementById('prog').style.width = '100%';
+  document.getElementById('timer').textContent = '60:00';
+  sessionId = 'session_' + Date.now();
+}
+
+// ── TIMER ──
+function startTimer() {
+  timerInterval = setInterval(() => {
+    secondsLeft--;
+    const m = Math.floor(secondsLeft/60).toString().padStart(2,'0');
+    const s = (secondsLeft%60).toString().padStart(2,'0');
+    document.getElementById('timer').textContent = `${m}:${s}`;
+    document.getElementById('prog').style.width = `${(secondsLeft/3600)*100}%`;
+    if (secondsLeft <= 0) clearInterval(timerInterval);
+  }, 1000);
+}
+
+// ── FETCH OPENING ──
+async function fetchOpening() {
+  showTyping();
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/session/start`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId, voice: selectedVoice })
+    });
+    const data = await res.json();
+    hideTyping();
+    addAIMsg(data.reply, null, null);
+    speakText(data.reply);
+  } catch {
+    hideTyping();
+    addAIMsg("Hey! I'm so happy you're here. What's your name? 😊");
+  }
+}
+
+// ── SEND MESSAGE ──
+async function sendMessage() {
+  const inp = document.getElementById('user-input');
+  const text = inp.value.trim();
+  if (!text || isLoading) return;
+  inp.value = ''; inp.style.height = 'auto';
+  setLoading(true);
+  stopSpeaking();
+
+  addUserMsg(text);
+  showTyping();
+
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/chat`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, voice: selectedVoice, sessionId })
+    });
+    const data = await res.json();
+    hideTyping();
+
+    if (data.error) {
+      addAIMsg("Oops, something went wrong! Try again 😊");
+    } else {
+      addAIMsg(data.reply, data.memory_note, data.correction);
+      speakText(data.reply);
+    }
+  } catch {
+    hideTyping();
+    addAIMsg("Can't connect to server. Make sure your backend is running! 🔌");
+  }
+
+  setLoading(false);
+}
+
+// ── MEMORY ──
+async function showMemory() {
+  try {
+    const res = await fetch(`${BACKEND_URL}/api/session/memory/${sessionId}`);
+    const data = await res.json();
+    const topics = data.topics?.length ? data.topics.join(', ') : 'just getting started!';
+    const name = data.userName ? `Your name: ${data.userName}` : '';
+    addAIMsg(`🧠 Here's what I remember!\n\n${name ? name + '\n' : ''}Topics we talked about: ${topics}\nMistakes I helped with: ${data.corrections}\nTotal messages: ${data.messageCount}`);
+  } catch {
+    addAIMsg("🧠 Memory feature needs the backend to be running! Start your server first.");
+  }
+}
+
+// ══════════════════════════════
+//   VOICE INPUT (Speech to Text)
+// ══════════════════════════════
+function setupRecognition() {
+  const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+  if (!SpeechRecognition) return null;
+
+  const rec = new SpeechRecognition();
+  rec.lang = 'en-US';
+  rec.interimResults = true;
+  rec.continuous = false;
+
+  rec.onstart = () => {
+    isListening = true;
+    document.getElementById('voice-btn').classList.add('listening');
+    document.getElementById('voice-status').textContent = '🎤 Listening... speak now!';
+  };
+
+  rec.onresult = (e) => {
+    let interim = '';
+    let final = '';
+    for (let i = e.resultIndex; i < e.results.length; i++) {
+      const t = e.results[i][0].transcript;
+      if (e.results[i].isFinal) final += t;
+      else interim += t;
+    }
+    document.getElementById('user-input').value = final || interim;
+    document.getElementById('voice-status').textContent = interim ? `💬 "${interim}"` : '';
+  };
+
+  rec.onend = () => {
+    isListening = false;
+    document.getElementById('voice-btn').classList.remove('listening');
+    document.getElementById('voice-status').textContent = '';
+    const text = document.getElementById('user-input').value.trim();
+    if (text) sendMessage();
+  };
+
+  rec.onerror = (e) => {
+    isListening = false;
+    document.getElementById('voice-btn').classList.remove('listening');
+    document.getElementById('voice-status').textContent = e.error === 'not-allowed' ? '❌ Mic permission denied' : '❌ Voice error. Try again.';
+    setTimeout(() => document.getElementById('voice-status').textContent = '', 3000);
+  };
+
+  return rec;
+}
+
+function toggleVoice() {
+  if (!recognition) recognition = setupRecognition();
+  if (!recognition) {
+    document.getElementById('voice-status').textContent = '❌ Voice not supported in this browser';
+    return;
+  }
+  if (isListening) {
+    recognition.stop();
+  } else {
+    stopSpeaking();
+    recognition.start();
+  }
+}
+
+// ══════════════════════════════
+//   VOICE OUTPUT (Text to Speech)
+// ══════════════════════════════
+function speakText(text) {
+  if (!speechSynth) return;
+  stopSpeaking();
+
+  // Clean text (remove emojis for cleaner speech)
+  const cleanText = text.replace(/[\u{1F300}-\u{1F9FF}]/gu, '').replace(/✏️|🧠|●/g,'').trim();
+  if (!cleanText) return;
+
+  const utterance = new SpeechSynthesisUtterance(cleanText);
+  const settings = voiceSettings[selectedVoice];
+  utterance.pitch = settings.pitch;
+  utterance.rate = settings.rate;
+  utterance.volume = 1;
+
+  // Pick best matching voice
+  if (availableVoices.length === 0) availableVoices = speechSynth.getVoices();
+  const preferred = availableVoices.find(v =>
+    v.lang.startsWith('en') &&
+    (settings.gender === 'female' ? v.name.toLowerCase().includes('female') || v.name.includes('Samantha') || v.name.includes('Karen') || v.name.includes('Victoria') : v.name.toLowerCase().includes('male') || v.name.includes('Daniel') || v.name.includes('Alex') || v.name.includes('Fred'))
+  ) || availableVoices.find(v => v.lang.startsWith('en'));
+
+  if (preferred) utterance.voice = preferred;
+
+  utterance.onstart = () => document.getElementById('speaking-badge').classList.add('active');
+  utterance.onend = () => document.getElementById('speaking-badge').classList.remove('active');
+  utterance.onerror = () => document.getElementById('speaking-badge').classList.remove('active');
+
+  speechSynth.speak(utterance);
+}
+
+function stopSpeaking() {
+  if (speechSynth.speaking) {
+    speechSynth.cancel();
+    document.getElementById('speaking-badge').classList.remove('active');
+  }
+}
+
+// ══════════════════════════════
+//   MESSAGE RENDERING
+// ══════════════════════════════
+function nowTime() { return new Date().toLocaleTimeString([], { hour:'2-digit', minute:'2-digit' }); }
+
+function addAIMsg(text, memNote, correction) {
+  const msgs = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.className = 'msg-row';
+  let html = `<div class="msg-av">${avatarSVGs[selectedVoice]}</div><div class="msg-content">`;
+  if (memNote) html += `<div class="mem-pill">🧠 ${memNote}</div>`;
+  html += `<div class="bubble ai">${text.replace(/\n/g,'<br>')}</div>`;
+  html += `<div class="msg-time">${nowTime()}</div></div>`;
+  row.innerHTML = html;
+  msgs.appendChild(row);
+
+  if (correction) {
+    const c = document.createElement('div');
+    c.className = 'correction';
+    c.innerHTML = `<div class="corr-label">✏️ Quick tip</div>
+      Instead of "<span class="corr-wrong">${correction.wrong}</span>", say "<span class="corr-right">${correction.right}</span>"
+      <div class="corr-tip">${correction.reason || correction.tip || ''}</div>`;
+    msgs.appendChild(c);
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function addUserMsg(text) {
+  const msgs = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.className = 'msg-row user';
+  row.innerHTML = `<div class="msg-content"><div class="bubble user">${text.replace(/\n/g,'<br>')}</div><div class="msg-time">${nowTime()}</div></div><div class="msg-av user-av">🙂</div>`;
+  msgs.appendChild(row);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function showTyping() {
+  const msgs = document.getElementById('messages');
+  const row = document.createElement('div');
+  row.className = 'typing-row'; row.id = 'typing';
+  row.innerHTML = `<div class="msg-av">${avatarSVGs[selectedVoice]}</div><div class="typing-bubble"><div class="t-dot"></div><div class="t-dot"></div><div class="t-dot"></div></div>`;
+  msgs.appendChild(row);
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function hideTyping() { document.getElementById('typing')?.remove(); }
+
+function setLoading(v) {
+  isLoading = v;
+  document.getElementById('send-btn').disabled = v;
+}
+
+function handleKey(e) {
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+}
+
+function autoResize(el) {
+  el.style.height = 'auto';
+  el.style.height = Math.min(el.scrollHeight, 110) + 'px';
+}
+</script>
+</body>
+</html>
