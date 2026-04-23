@@ -1,10 +1,5 @@
 require("dotenv").config();
 
-// ============================================
-//   SpeakReal Backend — GROQ API Version
-//   Run: node server.js
-// ============================================
-
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
@@ -14,15 +9,12 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "public")));
 
-// ✅ FIX: Use API key from .env
 const GROQ_API_KEY = process.env.GROQ_API_KEY;
-
-// Model (working one)
 const GROQ_MODEL = "llama-3.3-70b-versatile";
 
-// ============================================
-// MEMORY STORAGE
-// ============================================
+// ============================
+// MEMORY
+// ============================
 const sessions = {};
 
 function getSession(id) {
@@ -32,53 +24,51 @@ function getSession(id) {
       topics: [],
       corrections: 0,
       userName: null,
-      createdAt: new Date(),
     };
   }
   return sessions[id];
 }
 
-// ============================================
-// SYSTEM PROMPT
-// ============================================
+// ============================
+// SYSTEM PROMPT (FIXED)
+// ============================
 function buildSystemPrompt(voice, session) {
   const personas = {
-    Maya: "You are Maya, a warm and patient English teacher.",
-    Arjun: "You are Arjun, a calm English mentor.",
-    Zara: "You are Zara, a fun best friend.",
-    Leo: "You are Leo, a hype buddy.",
+    Maya: "You are Maya, a kind and patient English teacher. You speak gently and clearly.",
+    Arjun: "You are Arjun, a confident and cool English mentor. You speak smart and motivating.",
+    Zara: "You are Zara, a fun and energetic best friend. You speak casually and playfully.",
+    Leo: "You are Leo, a high-energy hype buddy. You speak with excitement and motivation."
   };
 
-  const persona = personas[voice] || personas["Maya"];
+  return `${personas[voice]}
 
-  return `${persona}
+You help users practice English conversation.
 
-You help users practice English.
-
-RULES:
-- Reply in 2–3 short sentences
+STRICT RULES:
+- Reply in 2 short sentences
 - Always ask 1 question
-- Correct mistakes gently
+- Keep tone matching your personality
+- If mistake → give correction
 
 IMPORTANT:
-Return ONLY valid JSON:
+Return ONLY JSON:
 
 {
   "reply": "...",
   "correction": null,
-  "topic": "...",
+  "topic": "general",
   "memory_note": null,
   "userName": null
 }`;
 }
 
-// ============================================
-// CALL GROQ API
-// ============================================
+// ============================
+// GROQ CALL
+// ============================
 async function callGroq(systemPrompt, history, message) {
   const messages = [{ role: "system", content: systemPrompt }];
 
-  history.slice(-16).forEach(h => {
+  history.slice(-10).forEach(h => {
     messages.push({ role: h.role, content: h.content });
   });
 
@@ -87,85 +77,61 @@ async function callGroq(systemPrompt, history, message) {
   const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
       "Authorization": `Bearer ${GROQ_API_KEY}`,
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
       model: GROQ_MODEL,
       messages,
-      temperature: 0.8,
-      max_tokens: 300,
-    }),
+      temperature: 0.7
+    })
   });
 
   const data = await response.json();
 
   if (!response.ok) {
-    console.error("❌ Groq Error:", data);
-    throw new Error(data?.error?.message || "Groq API error");
+    console.error(data);
+    throw new Error("Groq API error");
   }
 
-  return data.choices[0]?.message?.content || "";
+  return data.choices[0].message.content;
 }
 
-// ============================================
-// SAFE PARSER
-// ============================================
+// ============================
+// SAFE PARSE
+// ============================
 function parseResponse(text) {
   try {
-    const clean = text.replace(/```json|```/g, "").trim();
-    return JSON.parse(clean);
+    return JSON.parse(text.replace(/```json|```/g, "").trim());
   } catch {
     return {
-      reply: text || "Tell me again 😊",
+      reply: text,
       correction: null,
       topic: "chat",
       memory_note: null,
-      userName: null,
+      userName: null
     };
   }
 }
 
-// ============================================
-// TEST ROUTE
-// ============================================
-app.get("/api/test", (req, res) => {
-  res.json({ status: "Server working 🚀" });
-});
-
-// ============================================
-// SESSION START
-// ============================================
+// ============================
+// ROUTES
+// ============================
 app.post("/api/session/start", (req, res) => {
   const { sessionId, voice } = req.body;
-
-  if (!sessionId) {
-    return res.status(400).json({ error: "sessionId required" });
-  }
 
   getSession(sessionId);
 
   res.json({
-    reply: `Hey! I'm ${voice || "Maya"} 😊 What's your name?`,
+    reply: `Hey! I'm ${voice} 😊 What's your name?`,
     correction: null,
     topic: "intro",
-    memory_note: null,
+    memory_note: null
   });
 });
 
-// ============================================
-// CHAT API
-// ============================================
 app.post("/api/chat", async (req, res) => {
   const { message, voice, sessionId } = req.body;
-
-  if (!message || !sessionId) {
-    return res.status(400).json({ error: "message & sessionId required" });
-  }
-
-  if (!GROQ_API_KEY) {
-    return res.status(500).json({ error: "API key missing" });
-  }
 
   const session = getSession(sessionId);
   const systemPrompt = buildSystemPrompt(voice, session);
@@ -177,23 +143,17 @@ app.post("/api/chat", async (req, res) => {
     session.history.push({ role: "user", content: message });
     session.history.push({ role: "assistant", content: parsed.reply });
 
-    if (session.history.length > 20) {
-      session.history = session.history.slice(-20);
-    }
-
     res.json(parsed);
 
   } catch (err) {
-    console.error("❌ ERROR:", err.message);
-    res.status(500).json({ error: err.message });
+    console.error(err);
+    res.status(500).json({ error: "Server error" });
   }
 });
 
-// ============================================
-// START SERVER
-// ============================================
-const PORT = 3000;
-
-app.listen(PORT, () => {
-  console.log(`🚀 Running at http://localhost:${PORT}`);
+// ============================
+// START
+// ============================
+app.listen(3000, () => {
+  console.log("🚀 Running at http://localhost:3000");
 });
